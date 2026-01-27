@@ -1,36 +1,68 @@
 """Configuration management for Discord bot"""
 
 import os
+from dataclasses import dataclass, field
 from typing import List
 
 
+@dataclass
 class Config:
-    """Bot configuration loaded from environment variables"""
+    """Bot configuration loaded from environment variables with validation"""
 
     # Discord settings
-    DISCORD_TOKEN: str = os.getenv("DISCORD_TOKEN", "")
-    DISCORD_GUILD_ID: str = os.getenv("DISCORD_GUILD_ID", "")
+    discord_token: str = field(default_factory=lambda: os.getenv("DISCORD_TOKEN", ""))
+    discord_guild_id: str = field(
+        default_factory=lambda: os.getenv("DISCORD_GUILD_ID", "")
+    )
 
     # AI server settings
-    AI_SERVER_URL: str = os.getenv("AI_SERVER_URL", "")
-    AI_TIMEOUT_SECONDS: int = int(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+    ai_server_url: str = field(default_factory=lambda: os.getenv("AI_SERVER_URL", ""))
+    ai_timeout: int = field(
+        default_factory=lambda: int(os.getenv("AI_TIMEOUT_SECONDS", "60"))
+    )
+
+    # Message settings
+    message_limit: int = field(
+        default_factory=lambda: int(os.getenv("MESSAGE_LIMIT", "500"))
+    )
 
     # Permission settings
-    ALLOWED_ROLE_IDS: List[int] = [
-        int(role_id.strip())
-        for role_id in os.getenv("ALLOWED_ROLE_IDS", "").split(",")
-        if role_id.strip()
-    ]
+    allowed_role_ids: List[int] = field(
+        default_factory=lambda: [
+            int(role_id.strip())
+            for role_id in os.getenv("ALLOWED_ROLE_IDS", "").split(",")
+            if role_id.strip()
+        ]
+    )
 
     # Web search settings
-    WEB_SEARCH_API_KEY: str = os.getenv("WEB_SEARCH_API_KEY", "")
-    WEB_SEARCH_API_TYPE: str = os.getenv("WEB_SEARCH_API_TYPE", "brave")
+    web_search_api_key: str = field(
+        default_factory=lambda: os.getenv("WEB_SEARCH_API_KEY", "")
+    )
+    web_search_api_type: str = field(
+        default_factory=lambda: os.getenv("WEB_SEARCH_API_TYPE", "brave")
+    )
 
-    @classmethod
-    def validate(cls) -> None:
-        """Validate required configuration"""
-        if not cls.DISCORD_TOKEN:
-            raise ValueError("DISCORD_TOKEN is required")
+    def __post_init__(self) -> None:
+        """Validate required configuration after initialization"""
+        if not self.discord_token:
+            raise ValueError(
+                "DISCORD_TOKEN is required. Please set it in your .env file or environment variables."
+            )
 
-        if not cls.AI_SERVER_URL:
-            raise ValueError("AI_SERVER_URL is required")
+        if not self.ai_server_url:
+            raise ValueError(
+                "AI_SERVER_URL is required. Please set it in your .env file or environment variables."
+            )
+
+        # Validate timeout is positive
+        if self.ai_timeout <= 0:
+            raise ValueError(
+                f"AI_TIMEOUT_SECONDS must be positive, got {self.ai_timeout}"
+            )
+
+        # Validate message limit is positive
+        if self.message_limit <= 0:
+            raise ValueError(
+                f"MESSAGE_LIMIT must be positive, got {self.message_limit}"
+            )

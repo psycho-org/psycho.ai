@@ -1,13 +1,13 @@
 """Discord bot entry point for psycho.ai"""
 
 import logging
-import os
 from typing import Optional
 
 import discord
 from discord.ext import commands
 
-# Configure logging
+from bot.config import Config
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -17,26 +17,24 @@ logger = logging.getLogger(__name__)
 class Bot(commands.Bot):
     """Custom Discord bot for psycho.ai with AI-powered features"""
 
-    def __init__(self):
-        # Configure intents
+    def __init__(self, config: Config):
         intents = discord.Intents.default()
         intents.message_content = True
 
         super().__init__(
-            command_prefix="!",  # Fallback prefix for text commands
+            command_prefix="!",
             intents=intents,
-            help_command=None,  # We'll use slash commands primarily
+            help_command=None,
         )
 
+        self.config = config
         self.guild_id: Optional[int] = None
-        if guild_id := os.getenv("DISCORD_GUILD_ID"):
-            self.guild_id = int(guild_id)
+        if config.discord_guild_id:
+            self.guild_id = int(config.discord_guild_id)
 
     async def setup_hook(self) -> None:
-        """Called when the bot is starting up. Load cogs and sync commands."""
         logger.info("Running setup hook...")
 
-        # Load cogs
         cogs_to_load = [
             "bot.cogs.summary",
             "bot.cogs.websearch",
@@ -49,7 +47,6 @@ class Bot(commands.Bot):
             except Exception as e:
                 logger.error(f"Failed to load cog {cog}: {e}")
 
-        # Sync commands to guild (faster) or globally
         if self.guild_id:
             guild = discord.Object(id=self.guild_id)
             self.tree.copy_global_to(guild=guild)
@@ -60,8 +57,8 @@ class Bot(commands.Bot):
             logger.info("Synced commands globally")
 
     async def on_ready(self) -> None:
-        """Called when the bot is ready and connected to Discord"""
-        logger.info(f"Bot is ready! Logged in as {self.user} (ID: {self.user.id})")
+        if self.user:
+            logger.info(f"Bot is ready! Logged in as {self.user} (ID: {self.user.id})")
         logger.info(f"Connected to {len(self.guilds)} guild(s)")
 
         if self.guild_id:
@@ -69,15 +66,14 @@ class Bot(commands.Bot):
 
 
 def main():
-    """Main entry point for the Discord bot"""
-    token = os.getenv("DISCORD_TOKEN")
+    try:
+        config = Config()
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        raise
 
-    if not token:
-        logger.error("DISCORD_TOKEN environment variable not set")
-        raise ValueError("DISCORD_TOKEN is required")
-
-    bot = Bot()
-    bot.run(token)
+    bot = Bot(config)
+    bot.run(config.discord_token)
 
 
 if __name__ == "__main__":
