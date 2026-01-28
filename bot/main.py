@@ -2,11 +2,17 @@
 
 import logging
 from typing import Optional
+from pathlib import Path
 
 import discord
 from discord.ext import commands
+from dotenv import load_dotenv
 
 from bot.config import Config
+
+# Load .env file from project root
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
