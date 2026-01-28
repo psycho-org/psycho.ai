@@ -173,8 +173,6 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
             async with AIClient(config.ai_server_url, config.ai_timeout) as client:
                 result = await client.summarize(formatted_messages)
 
-            print(result)
-
             embed = _create_embed(
                 title="Conversation Summary",
                 description=result.summary,

@@ -1,9 +1,12 @@
 """AI client service for communicating with AI server"""
 
+import logging
 from dataclasses import dataclass
 from typing import Optional
 
 import aiohttp
+
+logger = logging.getLogger(__name__)
 
 
 # Custom exceptions
@@ -107,10 +110,14 @@ class AIClient:
         url = f"{self.base_url}/api/summarize"
         payload = {"messages": messages}
 
+        logger.info(f"[AI Request] POST {url} | messages: {len(messages)}")
+
         try:
             async with self._session.post(url, json=payload) as response:
+                logger.info(f"[AI Response] Status: {response.status}")
                 response.raise_for_status()
                 data = await response.json()
+                logger.info(f"[AI Response] Data keys: {list(data.keys())}")
 
                 # Validate response structure
                 if not isinstance(data, dict):
@@ -124,8 +131,13 @@ class AIClient:
                 # Validate field types
                 if not isinstance(data["summary"], str):
                     raise AIResponseError("summary field must be a string")
-                if not isinstance(data["message_count"], int) or data["message_count"] < 0:
-                    raise AIResponseError("message_count must be a non-negative integer")
+                if (
+                    not isinstance(data["message_count"], int)
+                    or data["message_count"] < 0
+                ):
+                    raise AIResponseError(
+                        "message_count must be a non-negative integer"
+                    )
 
                 return SummaryResult(
                     summary=data["summary"],
@@ -134,12 +146,18 @@ class AIClient:
                 )
 
         except aiohttp.ServerTimeoutError as e:
+            logger.error(f"[AI Error] ServerTimeoutError: {e}")
             raise AITimeoutError(f"Request to {url} timed out") from e
         except aiohttp.ClientResponseError as e:
-            raise AIResponseError(f"AI server returned error {e.status}: {e.message}") from e
+            logger.error(f"[AI Error] ClientResponseError: {e.status} {e.message}")
+            raise AIResponseError(
+                f"AI server returned error {e.status}: {e.message}"
+            ) from e
         except aiohttp.ClientError as e:
+            logger.error(f"[AI Error] ClientError: {e}")
             raise AIConnectionError(f"Failed to connect to {url}: {e}") from e
         except ValueError as e:
+            logger.error(f"[AI Error] ValueError: {e}")
             raise AIResponseError(f"Invalid JSON response: {e}") from e
 
     async def extract_decisions(self, messages: list[str]) -> DecisionResult:
@@ -163,10 +181,14 @@ class AIClient:
         url = f"{self.base_url}/api/decisions"
         payload = {"messages": messages}
 
+        logger.info(f"[AI Request] POST {url} | messages: {len(messages)}")
+
         try:
             async with self._session.post(url, json=payload) as response:
+                logger.info(f"[AI Response] Status: {response.status}")
                 response.raise_for_status()
                 data = await response.json()
+                logger.info(f"[AI Response] Data keys: {list(data.keys())}")
 
                 # Validate response structure
                 if not isinstance(data, dict):
@@ -191,7 +213,9 @@ class AIClient:
                                 f"Decision missing required field: {field}"
                             )
                         if not isinstance(decision_data[field], str):
-                            raise AIResponseError(f"Decision field '{field}' must be a string")
+                            raise AIResponseError(
+                                f"Decision field '{field}' must be a string"
+                            )
 
                     decisions.append(
                         Decision(
@@ -205,12 +229,18 @@ class AIClient:
                 return DecisionResult(decisions=decisions)
 
         except aiohttp.ServerTimeoutError as e:
+            logger.error(f"[AI Error] ServerTimeoutError: {e}")
             raise AITimeoutError(f"Request to {url} timed out") from e
         except aiohttp.ClientResponseError as e:
-            raise AIResponseError(f"AI server returned error {e.status}: {e.message}") from e
+            logger.error(f"[AI Error] ClientResponseError: {e.status} {e.message}")
+            raise AIResponseError(
+                f"AI server returned error {e.status}: {e.message}"
+            ) from e
         except aiohttp.ClientError as e:
+            logger.error(f"[AI Error] ClientError: {e}")
             raise AIConnectionError(f"Failed to connect to {url}: {e}") from e
         except ValueError as e:
+            logger.error(f"[AI Error] ValueError: {e}")
             raise AIResponseError(f"Invalid JSON response: {e}") from e
 
     async def generate_catchup(self, messages: list[str]) -> CatchupResult:
@@ -234,10 +264,14 @@ class AIClient:
         url = f"{self.base_url}/api/catchup"
         payload = {"messages": messages}
 
+        logger.info(f"[AI Request] POST {url} | messages: {len(messages)}")
+
         try:
             async with self._session.post(url, json=payload) as response:
+                logger.info(f"[AI Response] Status: {response.status}")
                 response.raise_for_status()
                 data = await response.json()
+                logger.info(f"[AI Response] Data keys: {list(data.keys())}")
 
                 # Validate response structure
                 if not isinstance(data, dict):
@@ -256,17 +290,25 @@ class AIClient:
                 # Validate key_points are strings
                 for i, point in enumerate(data["key_points"]):
                     if not isinstance(point, str):
-                        raise AIResponseError(f"key_points[{i}] must be a string, got {type(point).__name__}")
+                        raise AIResponseError(
+                            f"key_points[{i}] must be a string, got {type(point).__name__}"
+                        )
 
                 return CatchupResult(
                     narrative=data["narrative"], key_points=data["key_points"]
                 )
 
         except aiohttp.ServerTimeoutError as e:
+            logger.error(f"[AI Error] ServerTimeoutError: {e}")
             raise AITimeoutError(f"Request to {url} timed out") from e
         except aiohttp.ClientResponseError as e:
-            raise AIResponseError(f"AI server returned error {e.status}: {e.message}") from e
+            logger.error(f"[AI Error] ClientResponseError: {e.status} {e.message}")
+            raise AIResponseError(
+                f"AI server returned error {e.status}: {e.message}"
+            ) from e
         except aiohttp.ClientError as e:
+            logger.error(f"[AI Error] ClientError: {e}")
             raise AIConnectionError(f"Failed to connect to {url}: {e}") from e
         except ValueError as e:
+            logger.error(f"[AI Error] ValueError: {e}")
             raise AIResponseError(f"Invalid JSON response: {e}") from e
