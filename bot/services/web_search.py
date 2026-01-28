@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
+
 import aiohttp
 
 
@@ -94,7 +95,7 @@ class BraveSearchClient(WebSearchClient):
 
         try:
             async with self._session.get(
-                self.BASE_URL, headers=headers, params=params
+                    self.BASE_URL, headers=headers, params=params
             ) as response:
                 response.raise_for_status()
                 data = await response.json()
@@ -178,17 +179,27 @@ def create_client(api_type: str, api_key: str) -> WebSearchClient:
         WebSearchClient instance for the specified provider
 
     Raises:
-        ValueError: If api_type is not supported
+        ValueError: If api_type is not supported or if api_key is missing
     """
+    if not api_key:
+        raise ValueError(
+            f"API key is required for {api_type}. Please set WEB_SEARCH_API_KEY in your .env file."
+        )
+
     api_type = api_type.lower().strip()
 
     if api_type == "brave":
         return BraveSearchClient(api_key)
     elif api_type == "tavily":
-        return TavilySearchClient(api_key)
+        raise ValueError(
+            "Tavily search provider is not yet implemented. Please use 'brave' instead."
+        )
     elif api_type == "serpapi":
-        return SerpAPISearchClient(api_key)
+        raise ValueError(
+            "SerpAPI search provider is not yet implemented. Please use 'brave' instead."
+        )
     else:
         raise ValueError(
-            f"Unsupported API type: {api_type}. Supported types: brave, tavily, serpapi"
+            f"Unsupported API type: {api_type}. Currently supported: brave. "
+            f"Planned: tavily, serpapi"
         )

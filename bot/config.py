@@ -22,6 +22,8 @@ class Config:
     )
 
     # Message settings
+    # Maximum number of messages to fetch from a channel when processing
+    # (limits API calls and processing time for AI requests)
     message_limit: int = field(
         default_factory=lambda: int(os.getenv("MESSAGE_LIMIT", "500"))
     )

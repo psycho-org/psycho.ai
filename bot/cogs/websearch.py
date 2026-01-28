@@ -22,13 +22,13 @@ class WebSearchCog(commands.Cog):
     async def web_search(
         self, interaction: discord.Interaction, query: str, num_results: int = 5
     ):
-        # Defer response immediately (must be within 3 seconds)
-        await interaction.response.defer()
-
         if not has_allowed_role(interaction, self.bot.config.allowed_role_ids):
             error_msg = get_permission_error_message(self.bot.config.allowed_role_ids)
-            await interaction.followup.send(error_msg, ephemeral=True)
+            await interaction.response.send_message(error_msg, ephemeral=True)
             return
+
+        # Defer response after permission check
+        await interaction.response.defer()
 
         if num_results < 1 or num_results > 10:
             await interaction.followup.send(

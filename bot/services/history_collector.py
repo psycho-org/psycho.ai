@@ -1,9 +1,10 @@
 """Discord message history collection service"""
 
-import discord
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import List
+
+import discord
 
 
 @dataclass
@@ -24,7 +25,7 @@ HistoryScope = TimeScope | MessageLinkScope
 
 
 async def collect_history(
-    channel: discord.TextChannel, scope: HistoryScope, message_limit: int = 500
+        channel: discord.TextChannel, scope: HistoryScope, message_limit: int = 500
 ) -> List[discord.Message]:
     """
     Collect message history from a Discord channel based on scope.
@@ -67,7 +68,9 @@ async def collect_history(
             messages.append(message)
 
     # discord.py returns messages in reverse chronological order (newest first)
-    # Reverse to get chronological order (oldest first)
+    # Reverse to get chronological order (oldest first) for AI processing.
+    # The AI service expects messages ordered from oldest to newest to properly
+    # understand conversation flow and context.
     messages.reverse()
 
     return messages

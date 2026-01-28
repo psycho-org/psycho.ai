@@ -1,11 +1,12 @@
 """Permission checking utilities for Discord commands"""
 
-import discord
 from typing import List
+
+import discord
 
 
 def has_allowed_role(
-    interaction: discord.Interaction, allowed_role_ids: List[int]
+        interaction: discord.Interaction, allowed_role_ids: List[int]
 ) -> bool:
     """
     Check if the user invoking the interaction has any of the allowed roles.

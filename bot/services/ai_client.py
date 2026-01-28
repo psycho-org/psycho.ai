@@ -1,8 +1,9 @@
 """AI client service for communicating with AI server"""
 
-import aiohttp
 from dataclasses import dataclass
 from typing import Optional
+
+import aiohttp
 
 
 # Custom exceptions
@@ -120,15 +121,23 @@ class AIClient:
                         "Response missing required fields: summary, message_count"
                     )
 
+                # Validate field types
+                if not isinstance(data["summary"], str):
+                    raise AIResponseError("summary field must be a string")
+                if not isinstance(data["message_count"], int) or data["message_count"] < 0:
+                    raise AIResponseError("message_count must be a non-negative integer")
+
                 return SummaryResult(
                     summary=data["summary"],
                     message_count=data["message_count"],
                     time_range=data.get("time_range", ""),
                 )
 
+        except aiohttp.ServerTimeoutError as e:
+            raise AITimeoutError(f"Request to {url} timed out") from e
+        except aiohttp.ClientResponseError as e:
+            raise AIResponseError(f"AI server returned error {e.status}: {e.message}") from e
         except aiohttp.ClientError as e:
-            if isinstance(e, aiohttp.ServerTimeoutError):
-                raise AITimeoutError(f"Request to {url} timed out") from e
             raise AIConnectionError(f"Failed to connect to {url}: {e}") from e
         except ValueError as e:
             raise AIResponseError(f"Invalid JSON response: {e}") from e
@@ -181,6 +190,8 @@ class AIClient:
                             raise AIResponseError(
                                 f"Decision missing required field: {field}"
                             )
+                        if not isinstance(decision_data[field], str):
+                            raise AIResponseError(f"Decision field '{field}' must be a string")
 
                     decisions.append(
                         Decision(
@@ -193,9 +204,11 @@ class AIClient:
 
                 return DecisionResult(decisions=decisions)
 
+        except aiohttp.ServerTimeoutError as e:
+            raise AITimeoutError(f"Request to {url} timed out") from e
+        except aiohttp.ClientResponseError as e:
+            raise AIResponseError(f"AI server returned error {e.status}: {e.message}") from e
         except aiohttp.ClientError as e:
-            if isinstance(e, aiohttp.ServerTimeoutError):
-                raise AITimeoutError(f"Request to {url} timed out") from e
             raise AIConnectionError(f"Failed to connect to {url}: {e}") from e
         except ValueError as e:
             raise AIResponseError(f"Invalid JSON response: {e}") from e
@@ -235,16 +248,25 @@ class AIClient:
                         "Response missing required fields: narrative, key_points"
                     )
 
+                if not isinstance(data["narrative"], str):
+                    raise AIResponseError("narrative field must be a string")
                 if not isinstance(data["key_points"], list):
                     raise AIResponseError("key_points field must be a list")
+
+                # Validate key_points are strings
+                for i, point in enumerate(data["key_points"]):
+                    if not isinstance(point, str):
+                        raise AIResponseError(f"key_points[{i}] must be a string, got {type(point).__name__}")
 
                 return CatchupResult(
                     narrative=data["narrative"], key_points=data["key_points"]
                 )
 
+        except aiohttp.ServerTimeoutError as e:
+            raise AITimeoutError(f"Request to {url} timed out") from e
+        except aiohttp.ClientResponseError as e:
+            raise AIResponseError(f"AI server returned error {e.status}: {e.message}") from e
         except aiohttp.ClientError as e:
-            if isinstance(e, aiohttp.ServerTimeoutError):
-                raise AITimeoutError(f"Request to {url} timed out") from e
             raise AIConnectionError(f"Failed to connect to {url}: {e}") from e
         except ValueError as e:
             raise AIResponseError(f"Invalid JSON response: {e}") from e

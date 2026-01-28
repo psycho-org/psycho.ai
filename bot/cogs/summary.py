@@ -1,25 +1,26 @@
 """Summary cog - AI-powered conversation summarization"""
 
+import re
+from typing import Optional, Any
+
 import discord
 from discord import app_commands
 from discord.app_commands import Choice
 from discord.ext import commands
-import re
-from typing import Optional, Any
 
-from bot.utils.permissions import has_allowed_role, get_permission_error_message
-from bot.services.history_collector import (
-    collect_history,
-    TimeScope,
-    MessageLinkScope,
-    HistoryScope,
-)
 from bot.services.ai_client import (
     AIClient,
     AITimeoutError,
     AIConnectionError,
     AIResponseError,
 )
+from bot.services.history_collector import (
+    collect_history,
+    TimeScope,
+    MessageLinkScope,
+    HistoryScope,
+)
+from bot.utils.permissions import has_allowed_role, get_permission_error_message
 
 
 class SummaryCog(commands.Cog):
@@ -71,9 +72,7 @@ class SummaryCog(commands.Cog):
         else:
             raise ValueError(f"Invalid scope type: {scope_type}")
 
-    def _format_messages_for_ai(
-        self, messages: list[discord.Message]
-    ) -> list[str]:
+    def _format_messages_for_ai(self, messages: list[discord.Message]) -> list[str]:
         """
         Convert Discord messages to string list for AI client.
 
@@ -91,11 +90,11 @@ class SummaryCog(commands.Cog):
         return formatted
 
     def _create_embed(
-        self,
-        title: str,
-        description: str,
-        message_count: int,
-        time_range: Optional[str] = None,
+            self,
+            title: str,
+            description: str,
+            message_count: int,
+            time_range: Optional[str] = None,
     ) -> discord.Embed:
         """
         Create a Discord Embed for command response.
@@ -139,18 +138,16 @@ class SummaryCog(commands.Cog):
             Choice(name="From message link", value="link"),
         ]
     )
-    async def summarize(
-        self, interaction: discord.Interaction, scope_type: str, scope_value: str
-    ):
+    async def summarize(self, interaction: discord.Interaction, scope_type: str, scope_value: str):
         """Summarize conversation (public result)"""
-        await interaction.response.defer()
-
         if not has_allowed_role(interaction, self.bot.config.allowed_role_ids):
             error_msg = get_permission_error_message(
                 self.bot.config.allowed_role_ids
             )
-            await interaction.followup.send(error_msg, ephemeral=True)
+            await interaction.response.send_message(error_msg, ephemeral=True)
             return
+
+        await interaction.response.defer()
 
         try:
             scope = self._parse_scope(scope_type, scope_value)
@@ -175,7 +172,7 @@ class SummaryCog(commands.Cog):
             formatted_messages = self._format_messages_for_ai(messages)
 
             async with AIClient(
-                self.bot.config.ai_server_url, self.bot.config.ai_timeout
+                    self.bot.config.ai_server_url, self.bot.config.ai_timeout
             ) as client:
                 result = await client.summarize(formatted_messages)
 
@@ -219,18 +216,16 @@ class SummaryCog(commands.Cog):
             Choice(name="From message link", value="link"),
         ]
     )
-    async def decision_template(
-        self, interaction: discord.Interaction, scope_type: str, scope_value: str
-    ):
+    async def decision_template(self, interaction: discord.Interaction, scope_type: str, scope_value: str):
         """Extract decisions from conversation (public result)"""
-        await interaction.response.defer()
-
         if not has_allowed_role(interaction, self.bot.config.allowed_role_ids):
             error_msg = get_permission_error_message(
                 self.bot.config.allowed_role_ids
             )
-            await interaction.followup.send(error_msg, ephemeral=True)
+            await interaction.response.send_message(error_msg, ephemeral=True)
             return
+
+        await interaction.response.defer()
 
         try:
             scope = self._parse_scope(scope_type, scope_value)
@@ -254,9 +249,7 @@ class SummaryCog(commands.Cog):
 
             formatted_messages = self._format_messages_for_ai(messages)
 
-            async with AIClient(
-                self.bot.config.ai_server_url, self.bot.config.ai_timeout
-            ) as client:
+            async with AIClient(self.bot.config.ai_server_url, self.bot.config.ai_timeout) as client:
                 result = await client.extract_decisions(formatted_messages)
 
             if not result.decisions:
@@ -277,7 +270,7 @@ class SummaryCog(commands.Cog):
             embed = self._create_embed(
                 title="Decision Template",
                 description=description,
-                message_count=len(messages),
+                message_count=len(formatted_messages),
             )
 
             await interaction.followup.send(embed=embed)
@@ -313,17 +306,17 @@ class SummaryCog(commands.Cog):
         ]
     )
     async def catch_up(
-        self, interaction: discord.Interaction, scope_type: str, scope_value: str
+            self, interaction: discord.Interaction, scope_type: str, scope_value: str
     ):
         """Generate catch-up narrative (ephemeral result)"""
-        await interaction.response.defer(ephemeral=True)
-
         if not has_allowed_role(interaction, self.bot.config.allowed_role_ids):
             error_msg = get_permission_error_message(
                 self.bot.config.allowed_role_ids
             )
-            await interaction.followup.send(error_msg, ephemeral=True)
+            await interaction.response.send_message(error_msg, ephemeral=True)
             return
+
+        await interaction.response.defer(ephemeral=True)
 
         try:
             scope = self._parse_scope(scope_type, scope_value)
@@ -347,9 +340,7 @@ class SummaryCog(commands.Cog):
 
             formatted_messages = self._format_messages_for_ai(messages)
 
-            async with AIClient(
-                self.bot.config.ai_server_url, self.bot.config.ai_timeout
-            ) as client:
+            async with AIClient(self.bot.config.ai_server_url, self.bot.config.ai_timeout) as client:
                 result = await client.generate_catchup(formatted_messages)
 
             description = f"{result.narrative}\n\n**Key Points:**\n"
@@ -359,7 +350,7 @@ class SummaryCog(commands.Cog):
             embed = self._create_embed(
                 title="Catch Up",
                 description=description,
-                message_count=len(messages),
+                message_count=len(formatted_messages),
             )
 
             await interaction.followup.send(embed=embed, ephemeral=True)
