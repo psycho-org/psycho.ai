@@ -12,6 +12,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class TimeScope:
     """Fetch messages from the last N minutes"""
@@ -30,7 +31,7 @@ HistoryScope = TimeScope | MessageLinkScope
 
 
 async def collect_history(
-        channel: discord.TextChannel, scope: HistoryScope, message_limit: int = 500
+    channel: discord.TextChannel, scope: HistoryScope, message_limit: int = 500
 ) -> List[discord.Message]:
     """
     Collect message history from a Discord channel based on scope.
@@ -78,5 +79,4 @@ async def collect_history(
     # understand conversation flow and context.
     messages.reverse()
     logger.info(f"Collected {len(messages)} messages")
-    logger.info(messages)
     return messages

@@ -95,7 +95,7 @@ class BraveSearchClient(WebSearchClient):
 
         try:
             async with self._session.get(
-                    self.BASE_URL, headers=headers, params=params
+                self.BASE_URL, headers=headers, params=params
             ) as response:
                 response.raise_for_status()
                 data = await response.json()
@@ -125,46 +125,6 @@ class BraveSearchClient(WebSearchClient):
             raise WebSearchError(
                 f"Failed to parse Brave Search API response: {e}"
             ) from e
-
-
-class TavilySearchClient(WebSearchClient):
-    """Tavily Search API client (placeholder)"""
-
-    async def search(self, query: str, num_results: int = 5) -> list[SearchResult]:
-        """
-        Search using Tavily API (not implemented).
-
-        Args:
-            query: Search query string
-            num_results: Maximum number of results to return (default: 5)
-
-        Returns:
-            List of SearchResult objects
-
-        Raises:
-            NotImplementedError: This provider is not yet implemented
-        """
-        raise NotImplementedError("Tavily search provider not yet implemented")
-
-
-class SerpAPISearchClient(WebSearchClient):
-    """SerpAPI Search client (placeholder)"""
-
-    async def search(self, query: str, num_results: int = 5) -> list[SearchResult]:
-        """
-        Search using SerpAPI (not implemented).
-
-        Args:
-            query: Search query string
-            num_results: Maximum number of results to return (default: 5)
-
-        Returns:
-            List of SearchResult objects
-
-        Raises:
-            NotImplementedError: This provider is not yet implemented
-        """
-        raise NotImplementedError("SerpAPI search provider not yet implemented")
 
 
 def create_client(api_type: str, api_key: str) -> WebSearchClient:

@@ -1,9 +1,6 @@
-import discord
+"""Entry point redirecting to bot.main"""
 
-
-def main():
-    print("Hello from psycho-ai!")
-
+from bot.main import main
 
 if __name__ == "__main__":
     main()
