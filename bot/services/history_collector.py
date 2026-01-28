@@ -55,7 +55,7 @@ async def collect_history(
         after = datetime.now(timezone.utc) - timedelta(minutes=scope.minutes)
 
         # Fetch messages after the calculated time
-        async for message in channel.history(limit=message_limit, after=after):
+        async for message in channel.history(limit=message_limit, after=after, oldest_first=True):
             messages.append(message)
 
     elif isinstance(scope, MessageLinkScope):
@@ -70,13 +70,9 @@ async def collect_history(
             raise ValueError(f"Failed to fetch message {scope.message_id}: {e}")
 
         # Fetch messages after the target message
-        async for message in channel.history(limit=message_limit, after=target_message):
+        async for message in channel.history(limit=message_limit, after=target_message, oldest_first=True):
             messages.append(message)
 
-    # discord.py returns messages in reverse chronological order (newest first)
-    # Reverse to get chronological order (oldest first) for AI processing.
-    # The AI service expects messages ordered from oldest to newest to properly
-    # understand conversation flow and context.
-    messages.reverse()
     logger.info(f"Collected {len(messages)} messages")
+    logger.info(messages)
     return messages
