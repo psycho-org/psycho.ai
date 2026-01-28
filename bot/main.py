@@ -5,7 +5,7 @@ from typing import Optional
 from pathlib import Path
 
 import discord
-from discord.ext import commands
+from discord import app_commands
 from dotenv import load_dotenv
 
 from bot.config import Config
@@ -20,19 +20,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class Bot(commands.Bot):
+class Bot(discord.Client):
     """Custom Discord bot for psycho.ai with AI-powered features"""
 
     def __init__(self, config: Config):
         intents = discord.Intents.default()
         intents.message_content = True
 
-        super().__init__(
-            command_prefix="!",
-            intents=intents,
-            help_command=None,
-        )
+        super().__init__(intents=intents)
 
+        self.tree = app_commands.CommandTree(self)
         self.config = config
         self.guild_id: Optional[int] = None
         if config.discord_guild_id:
@@ -41,18 +38,14 @@ class Bot(commands.Bot):
     async def setup_hook(self) -> None:
         logger.info("Running setup hook...")
 
-        cogs_to_load = [
-            "bot.cogs.summary",
-            "bot.cogs.websearch",
-        ]
+        # Register commands
+        from bot.commands.websearch import register_websearch_commands
+        from bot.commands.summary import register_summary_commands
 
-        for cog in cogs_to_load:
-            try:
-                await self.load_extension(cog)
-                logger.info(f"Loaded cog: {cog}")
-            except Exception as e:
-                logger.error(f"Failed to load cog {cog}: {e}")
+        register_websearch_commands(self.tree, self.config)
+        register_summary_commands(self.tree, self.config)
 
+        # Sync commands
         if self.guild_id:
             guild = discord.Object(id=self.guild_id)
             self.tree.copy_global_to(guild=guild)

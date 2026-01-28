@@ -1,13 +1,13 @@
-"""Summary cog - AI-powered conversation summarization"""
+"""Summary commands - AI-powered conversation summarization"""
 
 import re
-from typing import Optional, Any
+from typing import Optional
 
 import discord
 from discord import app_commands
 from discord.app_commands import Choice
-from discord.ext import commands
 
+from bot.config import Config
 from bot.services.ai_client import (
     AIClient,
     AITimeoutError,
@@ -23,109 +23,108 @@ from bot.services.history_collector import (
 from bot.utils.permissions import has_allowed_role, get_permission_error_message
 
 
-class SummaryCog(commands.Cog):
-    """Cog for summarizing Discord conversations using AI"""
+def _parse_scope(scope_type: str, scope_value: str) -> HistoryScope:
+    """
+    Parse scope option into TimeScope or MessageLinkScope.
 
-    def __init__(self, bot: commands.Bot):
-        self.bot: Any = bot
+    Args:
+        scope_type: "time" or "link"
+        scope_value: Time format (30m/1h/2h) or message link/ID
 
-    def _parse_scope(self, scope_type: str, scope_value: str) -> HistoryScope:
-        """
-        Parse scope option into TimeScope or MessageLinkScope.
+    Returns:
+        TimeScope or MessageLinkScope
 
-        Args:
-            scope_type: "time" or "link"
-            scope_value: Time format (30m/1h/2h) or message link/ID
+    Raises:
+        ValueError: If scope format is invalid
+    """
+    if scope_type == "time":
+        match = re.match(r"^(\d+)([mh])$", scope_value.lower().strip())
+        if not match:
+            raise ValueError(
+                "Invalid time format. Use 30m, 1h, or 2h (e.g., '30m' for 30 minutes)"
+            )
 
-        Returns:
-            TimeScope or MessageLinkScope
+        amount, unit = match.groups()
+        minutes = int(amount) if unit == "m" else int(amount) * 60
 
-        Raises:
-            ValueError: If scope format is invalid
-        """
-        if scope_type == "time":
-            match = re.match(r"^(\d+)([mh])$", scope_value.lower().strip())
-            if not match:
+        return TimeScope(minutes=minutes)
+
+    elif scope_type == "link":
+        link_match = re.search(r"/(\d+)$", scope_value)
+        if link_match:
+            message_id = int(link_match.group(1))
+        else:
+            try:
+                message_id = int(scope_value.strip())
+            except ValueError:
                 raise ValueError(
-                    "Invalid time format. Use 30m, 1h, or 2h (e.g., '30m' for 30 minutes)"
+                    "Invalid message link or ID. Provide a Discord message link or numeric message ID"
                 )
 
-            amount, unit = match.groups()
-            minutes = int(amount) if unit == "m" else int(amount) * 60
+        return MessageLinkScope(message_id=message_id)
 
-            return TimeScope(minutes=minutes)
+    else:
+        raise ValueError(f"Invalid scope type: {scope_type}")
 
-        elif scope_type == "link":
-            link_match = re.search(r"/(\d+)$", scope_value)
-            if link_match:
-                message_id = int(link_match.group(1))
-            else:
-                try:
-                    message_id = int(scope_value.strip())
-                except ValueError:
-                    raise ValueError(
-                        "Invalid message link or ID. Provide a Discord message link or numeric message ID"
-                    )
 
-            return MessageLinkScope(message_id=message_id)
+def _format_messages_for_ai(messages: list[discord.Message]) -> list[str]:
+    """
+    Convert Discord messages to string list for AI client.
 
-        else:
-            raise ValueError(f"Invalid scope type: {scope_type}")
+    Args:
+        messages: List of Discord messages
 
-    def _format_messages_for_ai(self, messages: list[discord.Message]) -> list[str]:
-        """
-        Convert Discord messages to string list for AI client.
+    Returns:
+        List of formatted message strings
+    """
+    formatted = []
+    for msg in messages:
+        author_name = msg.author.display_name or msg.author.name
+        formatted.append(f"{author_name}: {msg.content}")
 
-        Args:
-            messages: List of Discord messages
+    return formatted
 
-        Returns:
-            List of formatted message strings
-        """
-        formatted = []
-        for msg in messages:
-            author_name = msg.author.display_name or msg.author.name
-            formatted.append(f"{author_name}: {msg.content}")
 
-        return formatted
+def _create_embed(
+    title: str,
+    description: str,
+    message_count: int,
+    time_range: Optional[str] = None,
+) -> discord.Embed:
+    """
+    Create a Discord Embed for command response.
 
-    def _create_embed(
-            self,
-            title: str,
-            description: str,
-            message_count: int,
-            time_range: Optional[str] = None,
-    ) -> discord.Embed:
-        """
-        Create a Discord Embed for command response.
+    Args:
+        title: Embed title
+        description: Embed description (AI result)
+        message_count: Number of messages processed
+        time_range: Optional time range string
 
-        Args:
-            title: Embed title
-            description: Embed description (AI result)
-            message_count: Number of messages processed
-            time_range: Optional time range string
+    Returns:
+        Discord Embed
+    """
+    if len(description) > 4000:
+        description = description[:3997] + "..."
 
-        Returns:
-            Discord Embed
-        """
-        if len(description) > 4000:
-            description = description[:3997] + "..."
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=discord.Color.blue(),
+    )
 
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.blue(),
-        )
+    footer_text = f"Covering {message_count} messages"
+    if time_range:
+        footer_text += f" from {time_range}"
 
-        footer_text = f"Covering {message_count} messages"
-        if time_range:
-            footer_text += f" from {time_range}"
+    embed.set_footer(text=footer_text)
 
-        embed.set_footer(text=footer_text)
+    return embed
 
-        return embed
 
-    @app_commands.command(
+def register_summary_commands(tree: app_commands.CommandTree, config: Config) -> None:
+    """Register summary commands to the command tree"""
+
+    @tree.command(
         name="summarize", description="Summarize conversation in this channel"
     )
     @app_commands.describe(
@@ -138,19 +137,19 @@ class SummaryCog(commands.Cog):
             Choice(name="From message link", value="link"),
         ]
     )
-    async def summarize(self, interaction: discord.Interaction, scope_type: str, scope_value: str):
+    async def summarize(
+        interaction: discord.Interaction, scope_type: str, scope_value: str
+    ):
         """Summarize conversation (public result)"""
-        if not has_allowed_role(interaction, self.bot.config.allowed_role_ids):
-            error_msg = get_permission_error_message(
-                self.bot.config.allowed_role_ids
-            )
+        if not has_allowed_role(interaction, config.allowed_role_ids):
+            error_msg = get_permission_error_message(config.allowed_role_ids)
             await interaction.response.send_message(error_msg, ephemeral=True)
             return
 
         await interaction.response.defer()
 
         try:
-            scope = self._parse_scope(scope_type, scope_value)
+            scope = _parse_scope(scope_type, scope_value)
 
             if not isinstance(interaction.channel, discord.TextChannel):
                 await interaction.followup.send(
@@ -160,7 +159,7 @@ class SummaryCog(commands.Cog):
                 return
 
             messages = await collect_history(
-                interaction.channel, scope, self.bot.config.message_limit
+                interaction.channel, scope, config.message_limit
             )
 
             if not messages:
@@ -169,14 +168,12 @@ class SummaryCog(commands.Cog):
                 )
                 return
 
-            formatted_messages = self._format_messages_for_ai(messages)
+            formatted_messages = _format_messages_for_ai(messages)
 
-            async with AIClient(
-                    self.bot.config.ai_server_url, self.bot.config.ai_timeout
-            ) as client:
+            async with AIClient(config.ai_server_url, config.ai_timeout) as client:
                 result = await client.summarize(formatted_messages)
 
-            embed = self._create_embed(
+            embed = _create_embed(
                 title="Conversation Summary",
                 description=result.summary,
                 message_count=result.message_count,
@@ -194,15 +191,11 @@ class SummaryCog(commands.Cog):
                 "Request timed out. Please try again.", ephemeral=True
             )
         except (AIConnectionError, AIResponseError) as e:
-            await interaction.followup.send(
-                f"AI service error: {e}", ephemeral=True
-            )
+            await interaction.followup.send(f"AI service error: {e}", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(
-                f"Unexpected error: {e}", ephemeral=True
-            )
+            await interaction.followup.send(f"Unexpected error: {e}", ephemeral=True)
 
-    @app_commands.command(
+    @tree.command(
         name="decision-template",
         description="Extract decisions from conversation as template",
     )
@@ -216,19 +209,19 @@ class SummaryCog(commands.Cog):
             Choice(name="From message link", value="link"),
         ]
     )
-    async def decision_template(self, interaction: discord.Interaction, scope_type: str, scope_value: str):
+    async def decision_template(
+        interaction: discord.Interaction, scope_type: str, scope_value: str
+    ):
         """Extract decisions from conversation (public result)"""
-        if not has_allowed_role(interaction, self.bot.config.allowed_role_ids):
-            error_msg = get_permission_error_message(
-                self.bot.config.allowed_role_ids
-            )
+        if not has_allowed_role(interaction, config.allowed_role_ids):
+            error_msg = get_permission_error_message(config.allowed_role_ids)
             await interaction.response.send_message(error_msg, ephemeral=True)
             return
 
         await interaction.response.defer()
 
         try:
-            scope = self._parse_scope(scope_type, scope_value)
+            scope = _parse_scope(scope_type, scope_value)
 
             if not isinstance(interaction.channel, discord.TextChannel):
                 await interaction.followup.send(
@@ -238,7 +231,7 @@ class SummaryCog(commands.Cog):
                 return
 
             messages = await collect_history(
-                interaction.channel, scope, self.bot.config.message_limit
+                interaction.channel, scope, config.message_limit
             )
 
             if not messages:
@@ -247,9 +240,9 @@ class SummaryCog(commands.Cog):
                 )
                 return
 
-            formatted_messages = self._format_messages_for_ai(messages)
+            formatted_messages = _format_messages_for_ai(messages)
 
-            async with AIClient(self.bot.config.ai_server_url, self.bot.config.ai_timeout) as client:
+            async with AIClient(config.ai_server_url, config.ai_timeout) as client:
                 result = await client.extract_decisions(formatted_messages)
 
             if not result.decisions:
@@ -267,7 +260,7 @@ class SummaryCog(commands.Cog):
 
                 description = "\n".join(decision_texts)
 
-            embed = self._create_embed(
+            embed = _create_embed(
                 title="Decision Template",
                 description=description,
                 message_count=len(formatted_messages),
@@ -284,15 +277,11 @@ class SummaryCog(commands.Cog):
                 "Request timed out. Please try again.", ephemeral=True
             )
         except (AIConnectionError, AIResponseError) as e:
-            await interaction.followup.send(
-                f"AI service error: {e}", ephemeral=True
-            )
+            await interaction.followup.send(f"AI service error: {e}", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(
-                f"Unexpected error: {e}", ephemeral=True
-            )
+            await interaction.followup.send(f"Unexpected error: {e}", ephemeral=True)
 
-    @app_commands.command(
+    @tree.command(
         name="catch-up", description="Generate catch-up narrative for missed messages"
     )
     @app_commands.describe(
@@ -306,20 +295,18 @@ class SummaryCog(commands.Cog):
         ]
     )
     async def catch_up(
-            self, interaction: discord.Interaction, scope_type: str, scope_value: str
+        interaction: discord.Interaction, scope_type: str, scope_value: str
     ):
         """Generate catch-up narrative (ephemeral result)"""
-        if not has_allowed_role(interaction, self.bot.config.allowed_role_ids):
-            error_msg = get_permission_error_message(
-                self.bot.config.allowed_role_ids
-            )
+        if not has_allowed_role(interaction, config.allowed_role_ids):
+            error_msg = get_permission_error_message(config.allowed_role_ids)
             await interaction.response.send_message(error_msg, ephemeral=True)
             return
 
         await interaction.response.defer(ephemeral=True)
 
         try:
-            scope = self._parse_scope(scope_type, scope_value)
+            scope = _parse_scope(scope_type, scope_value)
 
             if not isinstance(interaction.channel, discord.TextChannel):
                 await interaction.followup.send(
@@ -329,7 +316,7 @@ class SummaryCog(commands.Cog):
                 return
 
             messages = await collect_history(
-                interaction.channel, scope, self.bot.config.message_limit
+                interaction.channel, scope, config.message_limit
             )
 
             if not messages:
@@ -338,16 +325,16 @@ class SummaryCog(commands.Cog):
                 )
                 return
 
-            formatted_messages = self._format_messages_for_ai(messages)
+            formatted_messages = _format_messages_for_ai(messages)
 
-            async with AIClient(self.bot.config.ai_server_url, self.bot.config.ai_timeout) as client:
+            async with AIClient(config.ai_server_url, config.ai_timeout) as client:
                 result = await client.generate_catchup(formatted_messages)
 
             description = f"{result.narrative}\n\n**Key Points:**\n"
             for point in result.key_points:
                 description += f"• {point}\n"
 
-            embed = self._create_embed(
+            embed = _create_embed(
                 title="Catch Up",
                 description=description,
                 message_count=len(formatted_messages),
@@ -364,15 +351,6 @@ class SummaryCog(commands.Cog):
                 "Request timed out. Please try again.", ephemeral=True
             )
         except (AIConnectionError, AIResponseError) as e:
-            await interaction.followup.send(
-                f"AI service error: {e}", ephemeral=True
-            )
+            await interaction.followup.send(f"AI service error: {e}", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(
-                f"Unexpected error: {e}", ephemeral=True
-            )
-
-
-async def setup(bot: commands.Bot) -> None:
-    """Load the Summary cog"""
-    await bot.add_cog(SummaryCog(bot))
+            await interaction.followup.send(f"Unexpected error: {e}", ephemeral=True)

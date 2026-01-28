@@ -5,7 +5,12 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 
 import discord
+import logging
 
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 @dataclass
 class TimeScope:
@@ -72,5 +77,6 @@ async def collect_history(
     # The AI service expects messages ordered from oldest to newest to properly
     # understand conversation flow and context.
     messages.reverse()
-
+    logger.info(f"Collected {len(messages)} messages")
+    logger.info(messages)
     return messages
