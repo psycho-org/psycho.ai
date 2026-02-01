@@ -1,6 +1,6 @@
 # psycho.ai
 
-Discord bot that adds AI-powered summaries, decision extraction, catch-up narratives, and web search to a server.
+Discord bot that adds AI-powered summaries, decision extraction, catch-up narratives, web search, and reaction-based highlights to a server.
 
 ## Services
 
@@ -14,12 +14,22 @@ Discord bot that adds AI-powered summaries, decision extraction, catch-up narrat
 
 ## Slash commands
 
+### AI-powered commands
+
 - `/summarize`
     - Summarizes recent conversation in a channel.
     - Scope options: time window (e.g., `30m`, `1h`) or a message link/ID.
 - `/catch-up`
     - Generates an ephemeral catch-up narrative and key points for missed messages.
     - Scope options: time window or message link/ID.
+
+### Non-AI commands
+
+- `/highlights`
+    - Shows top 3 most-reacted messages from the last 24 hours in the current channel.
+    - Scoring: Unique human reactors (deduplicated across all emojis).
+    - Privacy-preserving: Only shows author name, reaction count, and jump link (no message content).
+    - Excludes: Bot/webhook-authored messages, bot reactors, author self-reactions.
 
 All commands can be restricted by role via `ALLOWED_ROLE_IDS` (see configuration).
 

@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import aiohttp
 
@@ -74,9 +73,9 @@ class AIClient:
             base_url: Base URL of AI server (e.g., http://localhost:8000)
             timeout: Request timeout in seconds (default: 60)
         """
-        self.base_url = base_url.rstrip("/")
-        self.timeout = aiohttp.ClientTimeout(total=timeout)
-        self._session: Optional[aiohttp.ClientSession] = None
+        self.base_url: str = base_url.rstrip("/")
+        self.timeout: aiohttp.ClientTimeout = aiohttp.ClientTimeout(total=timeout)
+        self._session: aiohttp.ClientSession | None = None
 
     async def __aenter__(self) -> "AIClient":
         """Create aiohttp session when entering context"""
