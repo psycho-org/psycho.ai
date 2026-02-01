@@ -26,7 +26,11 @@ def register_websearch_commands(tree: app_commands.CommandTree, config: Config) 
             return
 
         # Defer response after permission check
-        await interaction.response.defer()
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        except discord.NotFound:
+            return
 
         if num_results < 1 or num_results > 10:
             await interaction.followup.send(
