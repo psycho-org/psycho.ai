@@ -88,7 +88,7 @@ class AIClient:
             await self._session.close()
             self._session = None
 
-    async def summarize(self, messages: list[str]) -> SummaryResult:
+    async def summarize(self, messages: list[dict[str, str]]) -> SummaryResult:
         """
         Generate summary from messages
 
@@ -122,17 +122,21 @@ class AIClient:
                 if not isinstance(data, dict):
                     raise AIResponseError("Response is not a JSON object")
 
-                if "summary" not in data or "message_count" not in data:
+                if "summary" not in data:
+                    raise AIResponseError("Response missing required field: summary")
+
+                meta = data.get("meta")
+                if not isinstance(meta, dict) or "message_count" not in meta:
                     raise AIResponseError(
-                        "Response missing required fields: summary, message_count"
+                        "Response missing required field: meta.message_count"
                     )
 
                 # Validate field types
                 if not isinstance(data["summary"], str):
                     raise AIResponseError("summary field must be a string")
                 if (
-                    not isinstance(data["message_count"], int)
-                    or data["message_count"] < 0
+                    not isinstance(meta["message_count"], int)
+                    or meta["message_count"] < 0
                 ):
                     raise AIResponseError(
                         "message_count must be a non-negative integer"
@@ -140,7 +144,7 @@ class AIClient:
 
                 return SummaryResult(
                     summary=data["summary"],
-                    message_count=data["message_count"],
+                    message_count=meta["message_count"],
                     time_range=data.get("time_range", ""),
                 )
 
@@ -193,15 +197,21 @@ class AIClient:
                 if not isinstance(data, dict):
                     raise AIResponseError("Response is not a JSON object")
 
-                if "decisions" not in data:
-                    raise AIResponseError("Response missing required field: decisions")
+                decisions_list = data.get("data")
+                if decisions_list is None:
+                    decisions_list = data.get("decisions")
 
-                if not isinstance(data["decisions"], list):
-                    raise AIResponseError("decisions field must be a list")
+                if decisions_list is None:
+                    raise AIResponseError(
+                        "Response missing required field: data"
+                    )
+
+                if not isinstance(decisions_list, list):
+                    raise AIResponseError("data field must be a list")
 
                 # Parse decisions
                 decisions = []
-                for decision_data in data["decisions"]:
+                for decision_data in decisions_list:
                     if not isinstance(decision_data, dict):
                         raise AIResponseError("Each decision must be a JSON object")
 
