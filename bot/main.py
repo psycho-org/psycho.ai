@@ -41,9 +41,11 @@ class Bot(discord.Client):
         # Register commands
         from bot.commands.websearch import register_websearch_commands
         from bot.commands.summary import register_summary_commands
+        from bot.commands.highlights import register_highlights_commands
 
         register_websearch_commands(self.tree, self.config)
         register_summary_commands(self.tree, self.config)
+        register_highlights_commands(self.tree, self.config)
 
         # Sync commands
         if self.guild_id:
