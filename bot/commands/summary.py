@@ -1,7 +1,6 @@
 """Summary commands - AI-powered conversation summarization"""
 
 import re
-from typing import Optional
 
 import discord
 from discord import app_commands
@@ -21,6 +20,45 @@ from bot.services.history_collector import (
     HistoryScope,
 )
 from bot.utils.permissions import has_allowed_role, get_permission_error_message
+
+
+def _build_user_map(messages: list[discord.Message]) -> dict[str, str]:
+    user_map = {}
+    for msg in messages:
+        user_id_str = str(msg.author.id)
+        if user_id_str not in user_map:
+            display_name = msg.author.display_name or msg.author.name or "Unknown"
+            user_map[user_id_str] = display_name
+    return user_map
+
+
+def _escape_mentions_and_markdown(text: str) -> str:
+    text = re.sub(r"<@!?(\d+)>", r"@\1", text)
+    text = re.sub(r"<@&(\d+)>", r"@role:\1", text)
+    text = re.sub(r"<#(\d+)>", r"#\1", text)
+    return text
+
+
+def _replace_speaker_tokens_with_names(text: str, user_map: dict[str, str]) -> str:
+    lines = text.split("\n")
+    result_lines = []
+
+    for line in lines:
+        # Only replace tokens at line start (strict pattern for security)
+        match = re.match(r"^user:(\d+):?\s*(.*)$", line)
+        if match:
+            user_id = match.group(1)
+            rest_of_line = match.group(2)
+            display_name = user_map.get(user_id, "Unknown user")
+            safe_name = _escape_mentions_and_markdown(display_name)
+            result_lines.append(f"{safe_name}: {rest_of_line}")
+        else:
+            result_lines.append(line)
+
+    final_text = "\n".join(result_lines)
+    final_text = _escape_mentions_and_markdown(final_text)
+
+    return final_text
 
 
 def _parse_scope(scope_type: str, scope_value: str) -> HistoryScope:
@@ -71,16 +109,26 @@ def _format_messages_for_ai(messages: list[discord.Message]) -> list[str]:
     """
     Convert Discord messages to string list for AI client.
 
+    Uses speaker tokens (user:{id}) instead of display names to prevent
+    prompt injection and PII leakage.
+
     Args:
         messages: List of Discord messages
 
     Returns:
-        List of formatted message strings
+        List of formatted message strings with speaker tokens
     """
     formatted = []
     for msg in messages:
-        author_name = msg.author.display_name or msg.author.name
-        formatted.append(f"{author_name}: {msg.content}")
+        # Use user ID as speaker token to prevent prompt injection via nickname
+        speaker_token = f"user:{msg.author.id}"
+
+        # Escape newlines in content to prevent multiline speaker injection
+        safe_content = (
+            msg.content.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
+        )
+
+        formatted.append(f"{speaker_token}: {safe_content}")
 
     return formatted
 
@@ -89,7 +137,7 @@ def _create_embed(
     title: str,
     description: str,
     message_count: int,
-    time_range: Optional[str] = None,
+    time_range: str | None = None,
 ) -> discord.Embed:
     """
     Create a Discord Embed for command response.
@@ -146,7 +194,11 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
             await interaction.response.send_message(error_msg, ephemeral=True)
             return
 
-        await interaction.response.defer()
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        except discord.NotFound:
+            return
 
         try:
             scope = _parse_scope(scope_type, scope_value)
@@ -169,13 +221,16 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
                 return
 
             formatted_messages = _format_messages_for_ai(messages)
+            user_map = _build_user_map(messages)
 
             async with AIClient(config.ai_server_url, config.ai_timeout) as client:
                 result = await client.summarize(formatted_messages)
 
+            safe_summary = _replace_speaker_tokens_with_names(result.summary, user_map)
+
             embed = _create_embed(
                 title="Conversation Summary",
-                description=result.summary,
+                description=safe_summary,
                 message_count=result.message_count,
                 time_range=result.time_range,
             )
@@ -218,7 +273,11 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
             await interaction.response.send_message(error_msg, ephemeral=True)
             return
 
-        await interaction.response.defer()
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        except discord.NotFound:
+            return
 
         try:
             scope = _parse_scope(scope_type, scope_value)
@@ -241,6 +300,7 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
                 return
 
             formatted_messages = _format_messages_for_ai(messages)
+            user_map = _build_user_map(messages)
 
             async with AIClient(config.ai_server_url, config.ai_timeout) as client:
                 result = await client.extract_decisions(formatted_messages)
@@ -250,11 +310,24 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
             else:
                 decision_texts = []
                 for i, decision in enumerate(result.decisions, 1):
+                    safe_title = _replace_speaker_tokens_with_names(
+                        decision.title, user_map
+                    )
+                    safe_owner = _replace_speaker_tokens_with_names(
+                        decision.owner, user_map
+                    )
+                    safe_deadline = _replace_speaker_tokens_with_names(
+                        decision.deadline, user_map
+                    )
+                    safe_context = _replace_speaker_tokens_with_names(
+                        decision.context, user_map
+                    )
+
                     decision_text = (
-                        f"**{i}. {decision.title}**\n"
-                        f"Owner: {decision.owner}\n"
-                        f"Deadline: {decision.deadline}\n"
-                        f"Context: {decision.context}\n"
+                        f"**{i}. {safe_title}**\n"
+                        f"Owner: {safe_owner}\n"
+                        f"Deadline: {safe_deadline}\n"
+                        f"Context: {safe_context}\n"
                     )
                     decision_texts.append(decision_text)
 
@@ -303,7 +376,11 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
             await interaction.response.send_message(error_msg, ephemeral=True)
             return
 
-        await interaction.response.defer(ephemeral=True)
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(ephemeral=True)
+        except discord.NotFound:
+            return
 
         try:
             scope = _parse_scope(scope_type, scope_value)
@@ -326,12 +403,21 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
                 return
 
             formatted_messages = _format_messages_for_ai(messages)
+            user_map = _build_user_map(messages)
 
             async with AIClient(config.ai_server_url, config.ai_timeout) as client:
                 result = await client.generate_catchup(formatted_messages)
 
-            description = f"{result.narrative}\n\n**Key Points:**\n"
-            for point in result.key_points:
+            safe_narrative = _replace_speaker_tokens_with_names(
+                result.narrative, user_map
+            )
+            safe_key_points = [
+                _replace_speaker_tokens_with_names(point, user_map)
+                for point in result.key_points
+            ]
+
+            description = f"{safe_narrative}\n\n**Key Points:**\n"
+            for point in safe_key_points:
                 description += f"• {point}\n"
 
             embed = _create_embed(

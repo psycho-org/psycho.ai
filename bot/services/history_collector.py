@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import List
 
 import discord
 import logging
@@ -32,7 +31,7 @@ HistoryScope = TimeScope | MessageLinkScope
 
 async def collect_history(
     channel: discord.TextChannel, scope: HistoryScope, message_limit: int = 500
-) -> List[discord.Message]:
+) -> list[discord.Message]:
     """
     Collect message history from a Discord channel based on scope.
 
@@ -47,7 +46,7 @@ async def collect_history(
     Raises:
         ValueError: If message_id in MessageLinkScope is invalid
     """
-    messages: List[discord.Message] = []
+    messages: list[discord.Message] = []
 
     # Determine the 'after' parameter based on scope type
     if isinstance(scope, TimeScope):
@@ -55,7 +54,9 @@ async def collect_history(
         after = datetime.now(timezone.utc) - timedelta(minutes=scope.minutes)
 
         # Fetch messages after the calculated time
-        async for message in channel.history(limit=message_limit, after=after, oldest_first=True):
+        async for message in channel.history(
+            limit=message_limit, after=after, oldest_first=True
+        ):
             messages.append(message)
 
     elif isinstance(scope, MessageLinkScope):
@@ -70,9 +71,10 @@ async def collect_history(
             raise ValueError(f"Failed to fetch message {scope.message_id}: {e}")
 
         # Fetch messages after the target message
-        async for message in channel.history(limit=message_limit, after=target_message, oldest_first=True):
+        async for message in channel.history(
+            limit=message_limit, after=target_message, oldest_first=True
+        ):
             messages.append(message)
 
     logger.info(f"Collected {len(messages)} messages")
-    logger.info(messages)
     return messages
