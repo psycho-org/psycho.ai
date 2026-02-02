@@ -133,6 +133,30 @@ def _format_messages_for_ai(messages: list[discord.Message]) -> list[str]:
     return formatted
 
 
+def _format_messages_for_ai_with_timestamps(
+    messages: list[discord.Message],
+) -> list[dict[str, str]]:
+    """
+    Convert Discord messages to objects for AI client (text + timestamp).
+
+    Uses speaker tokens (user:{id}) instead of display names to prevent
+    prompt injection and PII leakage.
+    """
+    formatted: list[dict[str, str]] = []
+    for msg in messages:
+        speaker_token = f"user:{msg.author.id}"
+        safe_content = (
+            msg.content.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
+        )
+        formatted.append(
+            {
+                "text": f"{speaker_token}: {safe_content}",
+                "timestamp": msg.created_at.isoformat(),
+            }
+        )
+    return formatted
+
+
 def _create_embed(
     title: str,
     description: str,
@@ -221,10 +245,13 @@ def register_summary_commands(tree: app_commands.CommandTree, config: Config) ->
                 return
 
             formatted_messages = _format_messages_for_ai(messages)
+            formatted_messages_with_timestamps = _format_messages_for_ai_with_timestamps(
+                messages
+            )
             user_map = _build_user_map(messages)
 
             async with AIClient(config.ai_server_url, config.ai_timeout) as client:
-                result = await client.summarize(formatted_messages)
+                result = await client.summarize(formatted_messages_with_timestamps)
 
             safe_summary = _replace_speaker_tokens_with_names(result.summary, user_map)
 
